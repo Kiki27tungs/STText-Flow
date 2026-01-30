@@ -1,0 +1,7 @@
+{
+  "name": "Copy of STText",
+  "description": "A high-accuracy, bilingual speech-to-text assistant for audio and video files using Gemini Pro.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
