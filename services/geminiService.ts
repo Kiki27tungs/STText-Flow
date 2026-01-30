@@ -1,5 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
+import { GoogleGenAI } from "@google/genai";
 
 const SYSTEM_INSTRUCTION = `You are a bilingual speech-to-text assistant.
 
