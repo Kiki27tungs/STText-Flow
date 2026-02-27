@@ -1,7 +1,5 @@
 {
-  "name": "Copy of STText",
-  "description": "A high-accuracy, bilingual speech-to-text assistant for audio and video files using Gemini Pro.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
+  "name": "STText-Flow",
+  "description": "Gen-Z coded, bilingual speech-to-text transcriber powered by Gemini 3. Drop audio, get text.",
+  "requestFramePermissions": []
 }

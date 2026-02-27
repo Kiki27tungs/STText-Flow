@@ -1,113 +1,73 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { SYSTEM_PROMPT } from "../constants";
+import { TranscriptionModel } from "../types";
 
-const SYSTEM_INSTRUCTION = `You are a bilingual speech-to-text assistant.
-
-When the user uploads an audio or video file, transcribe all spoken content accurately from start to end.
-
-Rules:
-Transcribe everything that is spoken
-Do not summarize
-Do not skip unclear speech
-Do not stop early
-Preserve original word order
-
-Bilingual behavior:
-Automatically detect all spoken languages
-Support two languages in the same audio
-Allow language switching mid-sentence
-Transcribe each segment in its original language
-Do not translate unless the user explicitly asks
-
-Formatting:
-Use proper punctuation
-Break text into readable paragraphs
-Add speaker labels only if clearly detectable
-No explanations or commentary in the output
-
-Output:
-Return only the full transcript text
-
-Priority:
-Accuracy and completeness are more important than creativity.`;
-
-export const transcribeMedia = async (base64Data: string, mimeType: string): Promise<string> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API Key is missing in environment variables.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  // Use gemini-3-pro-preview for best multimodal reasoning and long context
-  const modelId = 'gemini-3-pro-preview'; 
-
+export const transcribeMedia = async (
+  base64Data: string,
+  mimeType: string,
+  onChunk: (text: string) => void,
+  modelName: string = TranscriptionModel.QUALITY
+): Promise<string> => {
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    // We use the stream method to provide feedback during the potentially long process
+    const responseStream = await ai.models.generateContentStream({
+      model: modelName,
       contents: {
         parts: [
           {
             inlineData: {
               mimeType: mimeType,
-              data: base64Data
-            }
+              data: base64Data,
+            },
           },
           {
-            text: "Transcribe the attached media file accurately following the system instructions."
-          }
-        ]
+            text: "Please transcribe the attached media file following the system instructions.",
+          },
+        ],
       },
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.2, // Low temperature for factual transcription
-      }
+        systemInstruction: SYSTEM_PROMPT,
+        temperature: 0.2, // Low temperature for more faithful transcription
+      },
     });
 
-    if (!response.text) {
-      throw new Error("No transcription text returned from the model.");
+    let fullText = "";
+    
+    for await (const chunk of responseStream) {
+      const c = chunk as GenerateContentResponse;
+      const text = c.text;
+      if (text) {
+        fullText += text;
+        onChunk(fullText);
+      }
     }
 
-    return response.text;
+    return fullText;
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    
-    if (error.message?.includes('413')) {
-       throw new Error("The file is too large for the current demo environment. Please try a shorter clip (under 20MB).");
-    }
-    
-    throw error;
+    console.error("Gemini Transcription Error:", error);
+    throw new Error(error.message || "Failed to transcribe media.");
   }
 };
 
-export const translateText = async (text: string, targetLanguage: string): Promise<string> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API Key is missing.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  // Use Flash for fast text-to-text tasks
-  const modelId = "gemini-3-flash-preview"; 
-
-  const prompt = `Translate the following text into ${targetLanguage}. 
-Ensure the translation is accurate, preserves the original tone, and maintains the formatting (paragraphs, speaker labels if any).
-Do not add any introductory or concluding remarks, just provide the translated text.
-
-Text to translate:
-${text}`;
-
+export const translateText = async (
+  text: string,
+  targetLanguage: string
+): Promise<string> => {
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-        model: modelId,
-        contents: prompt
+      model: 'gemini-3-flash-preview',
+      contents: `Translate the following text into ${targetLanguage}. Maintain the original formatting, speaker labels (if any), and tone. Return ONLY the translated text.\n\n[TEXT_START]\n${text}\n[TEXT_END]`,
+      config: {
+        temperature: 0.1,
+      }
     });
-    
-    if (!response.text) {
-        throw new Error("No translation returned.");
-    }
 
-    return response.text;
-  } catch (error) {
+    return response.text || "";
+  } catch (error: any) {
     console.error("Translation Error:", error);
-    throw error;
+    throw new Error(error.message || "Failed to translate text.");
   }
 };

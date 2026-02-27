@@ -1,108 +1,153 @@
-import React, { useRef, useState } from 'react';
-import { UploadCloud, FileAudio, FileVideo, Music, Film } from 'lucide-react';
-import { SUPPORTED_EXTENSIONS } from '../types';
+import React, { useCallback, useState } from 'react';
+import { FileData } from '../types';
+import { MAX_FILE_SIZE_BYTES, UI_MESSAGES } from '../constants';
 
 interface FileUploadProps {
-  onFileSelect: (file: File) => void;
+  onFileSelect: (data: FileData) => void;
+  disabled: boolean;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+// Helper to determine the most accurate MIME type
+const getCorrectMimeType = (file: File): string => {
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  
+  // Priority: Check extension first for common audio types that browsers mess up
+  switch (extension) {
+    case 'm4a': return 'audio/mp4';
+    case 'mp3': return 'audio/mpeg';
+    case 'wav': return 'audio/wav';
+    case 'aac': return 'audio/aac';
+    case 'flac': return 'audio/flac';
+    case 'ogg': return 'audio/ogg';
+    case 'opus': return 'audio/opus';
+    case 'webm': 
+        // Webm can be audio or video. If browser says audio/webm, keep it.
+        // If browser says video/webm, keep it.
+        // If ambiguous/empty, assume video usually, but for STT maybe audio? 
+        // Let's fallback to file.type.
+        return file.type || 'video/webm';
+    default:
+      return file.type || 'application/octet-stream';
+  }
+};
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
+export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }) => {
+  const [dragActive, setDragActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
+  const processFile = useCallback((file: File) => {
+    setError(null);
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError(`File too big. Limit is 400MB.`);
+      return;
+    }
+
+    const reader = new FileReader();
     
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      validateAndSelect(files[0]);
-    }
-  };
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      const [metadata, base64Data] = result.split(',');
+      
+      // We ignore the MIME type from the FileReader metadata because it's just what the browser thinks.
+      // Instead we use our robust helper.
+      const mimeType = getCorrectMimeType(file);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      validateAndSelect(e.target.files[0]);
-    }
-  };
+      if (base64Data && mimeType) {
+         console.log(`Processing file: ${file.name}, Detected MIME: ${mimeType} (Original: ${file.type})`);
+         onFileSelect({
+          file,
+          previewUrl: URL.createObjectURL(file),
+          base64Data,
+          mimeType
+        });
+      } else {
+        setError("Could not parse file.");
+      }
+    };
 
-  const validateAndSelect = (file: File) => {
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-    if (SUPPORTED_EXTENSIONS.includes(ext)) {
-      onFileSelect(file);
-    } else {
-      alert(`Unsupported file type. Please upload one of: ${SUPPORTED_EXTENSIONS.join(', ')}`);
+    reader.onerror = () => {
+      setError("Error reading file.");
+    };
+
+    reader.readAsDataURL(file);
+  }, [onFileSelect]);
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
     }
-  };
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  }, [processFile]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (e.target.files && e.target.files[0]) {
+      processFile(e.target.files[0]);
+    }
+  }, [processFile]);
 
   return (
-    <div 
-      className={`group relative border-[3px] border-dashed rounded-[2rem] p-12 transition-all duration-300 ease-out flex flex-col items-center justify-center min-h-[400px] cursor-pointer overflow-hidden
-        ${isDragging 
-          ? 'border-fuchsia-500 bg-fuchsia-50/80 scale-[1.02] shadow-2xl shadow-fuchsia-200' 
-          : 'border-indigo-200 bg-white/60 hover:border-violet-400 hover:bg-white hover:scale-[1.01] hover:shadow-xl hover:shadow-violet-200/50'
+    <div className="w-full">
+      <div
+        className={`relative group border-2 border-dashed rounded-3xl p-12 transition-all duration-300 ease-in-out text-center ${
+          dragActive 
+            ? 'border-violet-500 bg-violet-500/10' 
+            : disabled 
+              ? 'border-slate-800 bg-slate-900 cursor-not-allowed opacity-50' 
+              : 'border-slate-800 bg-slate-900/50 hover:border-violet-500 hover:bg-slate-900 cursor-pointer'
         }`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      onClick={() => inputRef.current?.click()}
-    >
-      <input 
-        type="file" 
-        className="hidden" 
-        ref={inputRef} 
-        accept={SUPPORTED_EXTENSIONS.join(',')}
-        onChange={handleInputChange}
-      />
-      
-      {/* Background decoration */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-indigo-50/50 via-purple-50/50 to-pink-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
-
-      <div className={`p-6 rounded-3xl mb-8 transition-all duration-300 shadow-sm ${
-        isDragging 
-          ? 'bg-fuchsia-100 text-fuchsia-600 scale-110 rotate-3' 
-          : 'bg-indigo-50 text-indigo-500 group-hover:bg-gradient-to-br group-hover:from-fuchsia-500 group-hover:to-purple-600 group-hover:text-white group-hover:scale-110 group-hover:-rotate-3 group-hover:shadow-lg group-hover:shadow-purple-500/30'
-      }`}>
-        <UploadCloud className="w-16 h-16" />
-      </div>
-      
-      <h3 className="text-3xl font-extrabold text-gray-900 mb-3 group-hover:bg-gradient-to-r group-hover:from-fuchsia-600 group-hover:to-purple-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
-        Drop media here
-      </h3>
-      
-      <p className="text-gray-500 text-center max-w-sm mb-10 text-lg font-medium leading-relaxed group-hover:text-gray-600">
-        Click to browse or drag & drop.
-        <br />
-        <span className="text-sm bg-white border border-gray-200 px-3 py-1.5 rounded-full mt-3 inline-block text-gray-400 font-semibold group-hover:border-purple-200 group-hover:text-purple-400 shadow-sm">
-          MP3, WAV, M4A, MP4, MOV
-        </span>
-      </p>
-
-      <div className="flex items-center gap-10 border-t border-gray-200/60 pt-8 w-full max-w-sm justify-center">
-        <div className="flex flex-col items-center gap-2 text-gray-400 group-hover:text-fuchsia-500 transition-colors">
-          <div className="p-2 rounded-full bg-gray-50 group-hover:bg-fuchsia-50 transition-colors">
-             <Music className="w-6 h-6" /> 
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={!disabled ? handleDrop : undefined}
+      >
+        <input
+          id="file-upload"
+          type="file"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+          onChange={handleChange}
+          accept="audio/*,video/*"
+          disabled={disabled}
+        />
+        
+        <div className="flex flex-col items-center justify-center space-y-4 pointer-events-none">
+          <div className={`p-4 rounded-full transition-colors ${dragActive ? 'bg-violet-500/20 text-violet-400' : 'bg-slate-800 text-slate-400 group-hover:bg-slate-800 group-hover:text-violet-400'}`}>
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v-11m0 0l-4 4m4-4l4 4" />
+            </svg>
           </div>
-          <span className="text-xs font-bold uppercase tracking-wider">Audio</span>
-        </div>
-        <div className="w-px h-10 bg-gray-200 group-hover:bg-purple-200 transition-colors"></div>
-        <div className="flex flex-col items-center gap-2 text-gray-400 group-hover:text-cyan-500 transition-colors">
-          <div className="p-2 rounded-full bg-gray-50 group-hover:bg-cyan-50 transition-colors">
-            <Film className="w-6 h-6" /> 
+          <div>
+            <p className="text-xl font-bold text-slate-100 tracking-tight">
+              {UI_MESSAGES.uploadHeadline}
+            </p>
+            <p className="text-sm text-slate-400 mt-2 font-medium">
+              {UI_MESSAGES.uploadSubtext}
+            </p>
           </div>
-          <span className="text-xs font-bold uppercase tracking-wider">Video</span>
         </div>
       </div>
+      
+      {error && (
+        <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl flex items-center">
+           <svg className="w-5 h-5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm font-bold">{error}</span>
+        </div>
+      )}
     </div>
   );
 };

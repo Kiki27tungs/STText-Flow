@@ -1,15 +1,23 @@
-export interface TranscriptionConfig {
-  language?: string;
+export interface TranscriptionState {
+  status: 'idle' | 'reading' | 'uploading' | 'transcribing' | 'completed' | 'error';
+  text: string;
+  error?: string;
+  translation?: {
+    status: 'idle' | 'translating' | 'completed' | 'error';
+    targetLanguage: string;
+    text: string;
+    error?: string;
+  };
 }
 
-export type SupportedMimeType = 
-  | 'audio/mp3'
-  | 'audio/mpeg'
-  | 'audio/wav' 
-  | 'audio/x-m4a'
-  | 'audio/m4a'
-  | 'audio/mp4'
-  | 'video/mp4'
-  | 'video/quicktime'; // .mov
+export interface FileData {
+  file: File;
+  previewUrl?: string;
+  base64Data?: string;
+  mimeType?: string;
+}
 
-export const SUPPORTED_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.mp4', '.mov'];
+export enum TranscriptionModel {
+  FAST = 'gemini-3-flash-preview',
+  QUALITY = 'gemini-3-pro-preview'
+}

@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# STText-Flow 🌊
 
-# Run and deploy your AI Studio app
+**Drop it. We’ll write it.**
 
-This contains everything you need to run your app locally.
+STText-Flow is a modern, Gen-Z coded Speech-to-Text application powered by Google's latest **Gemini 3** models. It handles audio and video up to 1 hour with professional-grade bilingual transcription accuracy, wrapped in a vibe-checked dark mode UI.
 
-View your app in AI Studio: https://ai.studio/apps/drive/12fn5Ptnb3K4Inu8jYPUAXgA6B3ff6yG1
+## Features ✨
 
-## Run Locally
+- **Bilingual Detection**: Automatically detects and transcribes mixed-language conversations. No cap.
+- **Deep Dark Mode**: A UI that respects your retinas.
+- **Heavy Lifting**: Supports files up to 400MB or 1 Hour in duration.
+- **Gemini Powered**: Switches between `gemini-3-flash` for speed and `gemini-3-pro` for maximum fidelity.
 
-**Prerequisites:**  Node.js
+## Tech Stack 🛠️
 
+- **Frontend**: React 19, Tailwind CSS
+- **AI**: Google GenAI SDK (`@google/genai`)
+- **Vibe**: Immaculate
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Setup & Usage
+
+1. **API Key**: This app requires a Google Gemini API Key.
+   - The key is accessed via `process.env.API_KEY`.
+   - Ensure your environment provides this variable.
+
+2. **Running**:
+   - This is a static React application using ES Modules.
+   - It relies on `importmap` for dependencies (no `npm install` required for the runtime).
+   - Simply serve the root directory.
+
+## License
+
+MIT
